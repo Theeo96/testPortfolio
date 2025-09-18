@@ -7,7 +7,6 @@
 
 ## 기술스택
  - Python
- - 
 
 ## 데모
  - 포트폴리오 사이트 링크 : https://theeo96.github.io/testPortfolio/
