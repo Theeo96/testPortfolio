@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>갤러그 (Galaga)</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            font-family: 'Press Start 2P', cursive; /* 복고풍 폰트 */
+        }
+        #game-container {
+            border: 2px solid #fff;
+            position: relative;
+            box-shadow: 0 0 20px #fff;
+        }
+        canvas {
+            background-color: #000;
+            display: block;
+        }
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 16px;
+            pointer-events: none; /* UI가 게임 클릭을 방해하지 않도록 설정 */
+        }
+        #game-over-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            display: none; /* 처음에는 숨김 */
+        }
+        #game-over-screen h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        #restart-button {
+            background-color: #fff;
+            color: #000;
+            border: none;
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        #restart-button:hover {
+            background-color: #ff0000;
+            color: #fff;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="ui-container">
+            <span id="score">SCORE: 0</span>
+            <span id="lives">LIVES: ❤️❤️❤️</span>
+        </div>
+        <div id="game-over-screen">
+            <h1>GAME OVER</h1>
+            <button id="restart-button">RESTART</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        const livesElement = document.getElementById('lives');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const restartButton = document.getElementById('restart-button');
+
+        const playerWidth = 50;
+        const playerHeight = 50;
+        let playerX = (canvas.width - playerWidth) / 2;
+        const playerY = canvas.height - playerHeight - 10;
+        const playerSpeed = 7;
+
+        const bulletWidth = 5;
+        const bulletHeight = 15;
+        const bulletSpeed = 10;
+        let bullets = [];
+
+        const enemyWidth = 40;
+        const enemyHeight = 30;
+        let enemies = [];
+        const enemyRows = 5;
+        const enemyCols = 10;
+        const enemySpacing = 15;
+        let enemyDirection = 1; // 1 for right, -1 for left
+        const enemySpeed = 2;
+        const enemyDrop = 10;
+
+        let score = 0;
+        let lives = 3;
+        let gameOver = false;
+        let keys = {};
+
+        // Player (Triangle Shape)
+        function drawPlayer() {
+            ctx.beginPath();
+            ctx.moveTo(playerX + playerWidth / 2, playerY);
+            ctx.lineTo(playerX, playerY + playerHeight);
+            ctx.lineTo(playerX + playerWidth, playerY + playerHeight);
+            ctx.closePath();
+            ctx.fillStyle = '#00ff00';
+            ctx.fill();
+        }
+
+        // Bullets (Rectangle Shape)
+        function drawBullets() {
+            ctx.fillStyle = '#ffff00';
+            bullets.forEach(bullet => {
+                ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+            });
+        }
+        
+        // Enemies (Rectangle Shape with simple colors)
+        function createEnemies() {
+            enemies = [];
+            for (let row = 0; row < enemyRows; row++) {
+                for (let col = 0; col < enemyCols; col++) {
+                    enemies.push({
+                        x: col * (enemyWidth + enemySpacing) + enemySpacing,
+                        y: row * (enemyHeight + enemySpacing) + enemySpacing + 50,
+                        w: enemyWidth,
+                        h: enemyHeight,
+                        color: `hsl(${row * 30}, 100%, 50%)` // 행마다 다른 색상
+                    });
+                }
+            }
+        }
+
+        function drawEnemies() {
+            enemies.forEach(enemy => {
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
+            });
+        }
+
+        function updatePlayer() {
+            if (keys['ArrowLeft'] && playerX > 0) {
+                playerX -= playerSpeed;
+            }
+            if (keys['ArrowRight'] && playerX < canvas.width - playerWidth) {
+                playerX += playerSpeed;
+            }
+        }
+
+        function updateBullets() {
+            bullets = bullets.filter(bullet => bullet.y > 0); // 화면 밖 총알 제거
+            bullets.forEach(bullet => {
+                bullet.y -= bulletSpeed;
+            });
+        }
+
+        function updateEnemies() {
+            if (enemies.length === 0) {
+                createEnemies(); // 모든 적을 처치하면 새로 생성
+            }
+
+            let moveDown = false;
+            for (const enemy of enemies) {
+                if ((enemy.x + enemy.w >= canvas.width && enemyDirection > 0) || (enemy.x <= 0 && enemyDirection < 0)) {
+                    enemyDirection *= -1;
+                    moveDown = true;
+                    break;
+                }
+            }
+
+            enemies.forEach(enemy => {
+                if (moveDown) {
+                    enemy.y += enemyDrop;
+                }
+                enemy.x += enemySpeed * enemyDirection;
+                
+                // 적이 바닥에 닿으면 게임 오버
+                if (enemy.y + enemy.h > playerY) {
+                    gameOver = true;
+                }
+            });
+        }
+        
+        function checkCollisions() {
+            // Bullet-Enemy Collision
+            bullets.forEach((bullet, bulletIndex) => {
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.x < enemy.x + enemy.w &&
+                        bullet.x + bullet.w > enemy.x &&
+                        bullet.y < enemy.y + enemy.h &&
+                        bullet.y + bullet.h > enemy.y) {
+                        
+                        // 충돌 발생
+                        bullets.splice(bulletIndex, 1);
+                        enemies.splice(enemyIndex, 1);
+                        score += 100;
+                        updateUI();
+                    }
+                });
+            });
+
+            // Enemy-Player Collision
+            enemies.forEach(enemy => {
+                if (playerX < enemy.x + enemy.w &&
+                    playerX + playerWidth > enemy.x &&
+                    playerY < enemy.y + enemy.h &&
+                    playerY + playerHeight > enemy.y) {
+                    
+                    lives--;
+                    updateUI();
+                    // 플레이어 잠시 무적 또는 위치 초기화
+                    playerX = (canvas.width - playerWidth) / 2;
+                    if (lives <= 0) {
+                        gameOver = true;
+                    }
+                }
+            });
+        }
+
+        function updateUI() {
+            scoreElement.textContent = `SCORE: ${score}`;
+            livesElement.innerHTML = `LIVES: ${'❤️'.repeat(lives)}`;
+        }
+
+        function shoot() {
+            // 총알은 한 번에 하나씩만 발사되도록 제한 (선택적)
+            if (bullets.length < 3) {
+                 bullets.push({
+                    x: playerX + playerWidth / 2 - bulletWidth / 2,
+                    y: playerY,
+                    w: bulletWidth,
+                    h: bulletHeight
+                });
+            }
+        }
+
+        function resetGame() {
+            playerX = (canvas.width - playerWidth) / 2;
+            bullets = [];
+            score = 0;
+            lives = 3;
+            gameOver = false;
+            enemyDirection = 1;
+            createEnemies();
+            updateUI();
+            gameOverScreen.style.display = 'none';
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (gameOver) {
+                gameOverScreen.style.display = 'block';
+                return;
+            }
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update game objects
+            updatePlayer();
+            updateBullets();
+            updateEnemies();
+            checkCollisions();
+
+            // Draw game objects
+            drawPlayer();
+            drawBullets();
+            drawEnemies();
+
+            // Request next frame
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event Listeners
+        window.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                e.preventDefault(); // 스페이스바의 기본 동작(스크롤) 방지
+                shoot();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        restartButton.addEventListener('click', resetGame);
+
+        // Start the game
+        createEnemies();
+        updateUI();
+        gameLoop();
+    </script>
+</body>
+</html>
