@@ -11,5 +11,5 @@
 
 ## 데모
  - 포트폴리오 사이트 링크 : https://theeo96.github.io/testPortfolio/
-
+ - 갤러그 게임 링크 : https://theeo96.github.io/testPortfolio/galaga.html
 
